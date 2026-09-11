@@ -183,6 +183,22 @@ bool reloadLibrary(kiwix::Manager& mgr, const std::vector<std::string>& paths)
     }
 }
 
+void addPathsInManager(kiwix::Manager& manager, const std::vector<std::string>& paths,
+                      bool skipInvalid)
+{
+  for (const auto& path : paths) {
+    if (!manager.addBookFromPath(path, path, "", false)) {
+      if (skipInvalid) {
+        std::cerr << "Skipping invalid '" << path << "' ...continuing" << std::endl;
+      } else {
+        std::cerr << "Unable to add the ZIM file '" << path
+             << "' to the internal library." << std::endl;
+        exit(1);
+      }
+    }
+  }
+}
+
 // docopt::value::isLong() is counting repeated values.
 // It doesn't check if the string can be parsed as long.
 // (Contrarly to `asLong` which will try to convert string to long)
@@ -214,7 +230,7 @@ int main(int argc, char** argv)
   std::string rootLocation = "/";
   auto library = kiwix::Library::create();
   unsigned int nb_threads = DEFAULT_THREADS;
-  std::vector<std::string> zimPathes;
+  std::vector<std::string> paths;
   std::string libraryPath;
   std::string rootPath;
   std::string address;
@@ -270,7 +286,7 @@ int main(int argc, char** argv)
     STRING("--customIndex", customIndexPath)
     INT("--ipConnectionLimit", ipConnectionLimit, "IP connection limit must be an integer")
     INT("--searchLimit", searchLimit, "Search limit must be an integer")
-    STRING_LIST("ZIMPATH", zimPathes, "ZIMPATH must be a string list")
+    STRING_LIST("ZIMPATH", paths, "ZIMPATH must be a string list")
  }
 
  if (!errorString.empty()) {
@@ -304,18 +320,7 @@ int main(int argc, char** argv)
            << "' is empty (or has only remote books)." << std::endl;
     }
   } else {
-    std::vector<std::string>::iterator it;
-    for (it = zimPathes.begin(); it != zimPathes.end(); it++) {
-      if (!manager.addBookFromPath(*it, *it, "", false)) {
-        if (skipInvalid) {
-          std::cerr << "Skipping invalid '" << *it << "' ...continuing" << std::endl;
-        } else {
-          std::cerr << "Unable to add the ZIM file '" << *it
-               << "' to the internal library." << std::endl;
-          exit(1);
-        }
-      }
-    }
+    addPathsInManager(manager, paths, skipInvalid);
   }
   auto libraryFileTimestamp = newestFileTimestamp(libraryPaths);
   auto curLibraryFileTimestamp = libraryFileTimestamp;
