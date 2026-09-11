@@ -23,6 +23,7 @@
 #include <kiwix/server.h>
 #include <kiwix/name_mapper.h>
 #include <kiwix/tools.h>
+#include <filesystem>
 
 #ifdef _WIN32
 # include <windows.h>
@@ -44,19 +45,20 @@
 #define LITERAL_AS_STR(A) #A
 #define AS_STR(A) LITERAL_AS_STR(A)
 
+namespace fs = std::filesystem;
 
 static const char USAGE[] =
 R"(Deliver ZIM file(s) articles via HTTP
 
 Usage:
- kiwix-serve [options] ZIMPATH ...
+ kiwix-serve [options] PATH ...
  kiwix-serve [options] (-l | --library) LIBRARYPATH
  kiwix-serve -h | --help
  kiwix-serve -V | --version
 
 Mandatory arguments:
   LIBRARYPATH  Library file path (XML or OPDS) listing ZIM file to serve. To be used only with the --library argument."
-  ZIMPATH      ZIM file path(s)
+  PATH         A ZIM file path or a directory path (in which case all ZIM files under that directory are used).
 
 Options:
  -h --help                               Print this help
@@ -184,16 +186,38 @@ bool reloadLibrary(kiwix::Manager& mgr, const std::vector<std::string>& paths)
 }
 
 void addPathsInManager(kiwix::Manager& manager, const std::vector<std::string>& paths,
-                      bool skipInvalid)
+                      bool skipInvalid, bool isVerboseFlag)
 {
   for (const auto& path : paths) {
-    if (!manager.addBookFromPath(path, path, "", false)) {
-      if (skipInvalid) {
-        std::cerr << "Skipping invalid '" << path << "' ...continuing" << std::endl;
-      } else {
-        std::cerr << "Unable to add the ZIM file '" << path
-             << "' to the internal library." << std::endl;
-        exit(1);
+    std::error_code ec;
+    const bool isDir = fs::is_directory(path, ec);
+
+    if (isDir) {
+      // It's a directory - try to add all ZIM files inside it
+      try {
+        manager.addBooksFromDirectory(path, isVerboseFlag);
+      } catch (const fs::filesystem_error& e) {
+        if (skipInvalid) {
+          std::cerr << "Skipping directory '" << path << "': "
+                    << e.what() << "." << std::endl;
+        } else {
+          std::cerr << "Unable to scan directory '" << path << "': "
+                    << e.what() << "." << std::endl;
+          exit(1);
+        }
+      }
+    } else {
+      // Not a directory: either a regular ZIM file, a nonexistent path, or
+      // a path that could not be stat'd (e.g. permission denied on parent dir).
+      // Delegate to addBookFromPath which will report a suitable error itself.
+      if (!manager.addBookFromPath(path, path, "", false)) {
+        if (skipInvalid) {
+          std::cerr << "Skipping invalid path '" << path << "'." << std::endl;
+        } else {
+          std::cerr << "Unable to add '" << path
+              << "' to the internal library." << std::endl;
+          exit(1);
+        }
       }
     }
   }
@@ -286,7 +310,7 @@ int main(int argc, char** argv)
     STRING("--customIndex", customIndexPath)
     INT("--ipConnectionLimit", ipConnectionLimit, "IP connection limit must be an integer")
     INT("--searchLimit", searchLimit, "Search limit must be an integer")
-    STRING_LIST("ZIMPATH", paths, "ZIMPATH must be a string list")
+    STRING_LIST("PATH", paths, "PATH must be a string list")
  }
 
  if (!errorString.empty()) {
@@ -320,7 +344,7 @@ int main(int argc, char** argv)
            << "' is empty (or has only remote books)." << std::endl;
     }
   } else {
-    addPathsInManager(manager, paths, skipInvalid);
+    addPathsInManager(manager, paths, skipInvalid, isVerboseFlag);
   }
   auto libraryFileTimestamp = newestFileTimestamp(libraryPaths);
   auto curLibraryFileTimestamp = libraryFileTimestamp;
