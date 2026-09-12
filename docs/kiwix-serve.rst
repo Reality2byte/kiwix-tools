@@ -25,7 +25,8 @@ Usage
 .. code-block:: sh
 
   kiwix-serve --library [OPTIONS] LIBRARY_FILE_PATH
-  kiwix-serve [OPTIONS] ZIM_FILE_PATH ...
+  kiwix-serve [OPTIONS] PATH ...
+
 
 
 Arguments
@@ -37,7 +38,9 @@ Arguments
 to serve. To be used only with the :option:`--library` option. Multiple
 library files can be provided as a semicolon (``;``) separated list.
 
-``ZIM_FILE_PATH``: ZIM file path (multiple arguments are allowed).
+``PATH``: a ZIM file path or a directory path. When a directory is given, all
+ZIM files under that directory are used. Multiple arguments are allowed.
+
 
 Options
 -------
